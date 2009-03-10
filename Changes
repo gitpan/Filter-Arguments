@@ -1,5 +1,8 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.02  Mon Mar 09 06:57:00 2009
+    - Update dependencies list
+
 0.01  Sat Mar 07 18:31:25 2009
 	- original version
 

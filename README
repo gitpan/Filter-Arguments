@@ -1,4 +1,4 @@
-Filter-Arguments version 0.01
+Filter-Arguments version 0.02
 =============================
 
 INSTALLATION
@@ -9,6 +9,7 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
+  Template
   Filter::Simple
 
 COPYRIGHT AND LICENCE

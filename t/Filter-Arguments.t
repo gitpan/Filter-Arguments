@@ -13,7 +13,7 @@ BEGIN {
 
 my $result = eval {
 
-    my @ARGV = qw( --solo --a --b --c --d A --e B --f C --x --y --z );
+    my @ARGV = qw( --solo --a --b --c --d A --e B --f C --x --y --z --six );
 
     my $solo                : Argument(bool) = 1;
     my ($a,$b,$c)           : Arguments(bool);
@@ -32,6 +32,6 @@ my $result = eval {
     );
     return join ',', @result;
 };
-is( $result, '0,1,1,1,A,B,C,0,0,1,3,4,5,SIX,SEVEN,EIGHT', 'mixed argument types' );
+is( $result, '0,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT', 'mixed argument types' );
 
 

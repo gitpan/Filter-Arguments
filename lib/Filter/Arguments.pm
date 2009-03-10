@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use 5.0071;
 use strict;
@@ -189,37 +189,40 @@ __END__
 =pod
 =head1 NAME
 
-Filter::Arguments - Configure and read your command line arguments. 
+Filter::Arguments - Configure and read your command line arguments from @ARGV. 
 
 =head1 SYNOPSIS
 
-	use Filter::Arguments;
+ use Filter::Arguments;
 
-    my $solo                : Argument(bool) = 1;
-    my ($a,$b,$c)           : Arguments(bool);
-    my ($d,$e,$f)           : Arguments(value);
-    my ($x,$y,$z)           : Arguments(xbool);
-    my ($three,$four,$five) : Arguments(value) = (3,4,5);
-    my ($six,$seven,$eight) : Arguments(bool)  = ('SIX','SEVEN','EIGHT');
+ my $solo                : Argument(bool) = 1;
+ my ($a,$b,$c)           : Arguments(bool);
+ my ($d,$e,$f)           : Arguments(value);
+ my ($x,$y,$z)           : Arguments(xbool);
+ my ($three,$four,$five) : Arguments(value) = (3,4,5);
+ my ($six,$seven,$eight) : Arguments(bool)  = ('SIX','SEVEN','EIGHT');
 
-    my @result = (
-        $solo,
-        $a, $b, $c,
-        $d, $e, $f,
-        $x, $y, $z,
-        $three, $four, $five,
-        $six, $seven, $eight,
-    );
-        
-    print join ',', @result;
+ my @result = (
+     $solo,
+     $a, $b, $c,
+     $d, $e, $f,
+     $x, $y, $z,
+     $three, $four, $five,
+     $six, $seven, $eight,
+ );
+    
+ print join ',', @result;
 
-    # if invoked as:
-    $ script.pl --solo --a --b --c --d A --e B --f C --x --y --z
-    # will print: 0,1,1,1,A,B,C,0,0,1,3,4,5,SIX,SEVEN,EIGHT
+if invoked as:
+ $ script.pl --solo --a --b --c --d A --e B --f C --x --y --z --six
+
+will print: 
+
+ 0,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT
 
 =head1 DESCRIPTION
 
-Here is a simple way to configure and parse your command line arguments.
+Here is a simple way to configure and parse your command line arguments from @ARGV.
 
 =head2 ARG TYPES
 
@@ -242,6 +245,11 @@ of the one that is set.
 This type takes on the value of the next argument presented.
 
 =back
+
+=head1 DEPENDENCIES
+
+Template
+Filter::Simple
 
 =head1 AUTHOR
 
