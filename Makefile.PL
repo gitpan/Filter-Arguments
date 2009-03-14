@@ -6,8 +6,8 @@ WriteMakefile(
     NAME              => 'Filter::Arguments',
     VERSION_FROM      => 'lib/Filter/Arguments.pm', # finds $VERSION
     PREREQ_PM         => {
-        'Template'       => '2.20';
-        'Filter::Simple' => '0.82';
+        'Template'       => '2.20',
+        'Filter::Simple' => '0.82',
     }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Filter/Arguments.pm', # retrieve abstract from module
