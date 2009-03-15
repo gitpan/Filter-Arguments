@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use 5.0071;
 use strict;
@@ -32,7 +32,7 @@ my $Arguments_Regex = qr{
         my \s+ [(]? ( \s* \$\w+ (?: \s* [,] \s* \$ \w+ )* ) \s* [)]? 
         \s* : \s* 
         Arguments? 
-        [(] \s* ( \w+ (?: [:] \w+ )? ) \s* [)] \s* 
+        (?: [(] \s* ( \w+ ) \s* [)] )? \s* 
         (?: = \s* ( .+? ) )? 
         ; \s* \n 
     )
@@ -74,7 +74,7 @@ my $template_arguments = <<'ARGUMENTS';
 ARGUMENTS
 
 FILTER_ONLY
-	executable => sub {
+	code_no_comments => sub {
 
         my %arguments;
         my @lines;
@@ -85,7 +85,7 @@ FILTER_ONLY
 
             my $line           = $1;
             my $names          = $2;
-            my $type           = $3;
+            my $type           = $3 || 'bool';
             my $initialization = $4;
 
             my $declaration 
@@ -196,6 +196,7 @@ Filter::Arguments - Configure and read your command line arguments from @ARGV.
  use Filter::Arguments;
 
  my $solo                : Argument(bool) = 1;
+ my $bool_default        : Argument;
  my ($a,$b,$c)           : Arguments(bool);
  my ($d,$e,$f)           : Arguments(value);
  my ($x,$y,$z)           : Arguments(xbool);
@@ -204,6 +205,7 @@ Filter::Arguments - Configure and read your command line arguments from @ARGV.
 
  my @result = (
      $solo,
+     $bool_default,
      $a, $b, $c,
      $d, $e, $f,
      $x, $y, $z,
@@ -218,7 +220,7 @@ if invoked as:
 
 will print: 
 
- 0,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT
+ 0,,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT
 
 =head1 DESCRIPTION
 
@@ -228,10 +230,10 @@ Here is a simple way to configure and parse your command line arguments from @AR
 
 =over
 
-=item bool
+=item bool (default)
 
 This type of argument is either 1 or 0. If it is initialized to 1, then 
-it will flip-flop to 0 if the arg is given.
+it will flip-flop to 0 if the arg is given. 
 
 =item xbool
 
@@ -250,6 +252,18 @@ This type takes on the value of the next argument presented.
 
 Template
 Filter::Simple
+
+=head1 BUGS
+
+The line numbers reported in errors/warnings etc. are not what they seem.
+As a work-around, you can use the comment line number trick after the last
+argument attribute like this:
+
+ 26 ...
+ 27 my $verbose : Argument(bool);
+ 28 my $number  : Argument(value);
+ 29 # line 30
+ 30 ... 
 
 =head1 AUTHOR
 

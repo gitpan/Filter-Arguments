@@ -1,5 +1,9 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.04  Sat Mar 14 14:25:44 2009
+    - Ignores commented Argument attributes.
+    - Argument attribute without type defaults to bool.
+
 0.03  Sat Mar 14 07:33:38 2009
     - Fixed Makefile.PL
 
