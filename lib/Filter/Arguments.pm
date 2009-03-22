@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 use 5.0071;
 use strict;
@@ -34,7 +34,7 @@ my $Arguments_Regex = qr{
         Arguments? 
         (?: [(] \s* ( \w+ ) \s* [)] )? \s* 
         (?: = \s* ( .+? ) )? 
-        ; \s* \n 
+        ; 
     )
 }msx;
 
@@ -169,6 +169,8 @@ FILTER_ONLY
         );
         $template->process( \$template_arguments, \%args, \$argument_code );
 
+        $argument_code =~ s{\n}{ }msxg;
+
         while ( my $line = shift @lines ) {
 
             $line =~ s{([\$\(\)])}{\\$1}msxg;
@@ -255,15 +257,23 @@ Filter::Simple
 
 =head1 BUGS
 
-The line numbers reported in errors/warnings etc. are not what they seem.
-As a work-around, you can use the comment line number trick after the last
-argument attribute like this:
+Line numbers will be inaccurate if you have an Argument 
+declaration which spans multiple lines.
 
- 26 ...
- 27 my $verbose : Argument(bool);
- 28 my $number  : Argument(value);
- 29 # line 30
- 30 ... 
+Example:
+
+ my $a
+ : Argument = 1;
+
+Line numbers in warnings and errors will be one less than true.
+
+Also, don't put comments at the end of an Argument line.
+
+Example:
+
+ my $a :Argument = 1; # comment
+
+This will result in an 'Invalid SCALAR attribute' compile time error.
 
 =head1 AUTHOR
 

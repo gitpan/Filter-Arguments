@@ -1,9 +1,12 @@
-Filter-Arguments version 0.04
+Filter-Arguments version 0.05
 =============================
 
 INSTALLATION
 
-cpan Filter::Arguments
+   perl Makefile.PL
+   make
+   make test
+   make install
 
 DEPENDENCIES
 
