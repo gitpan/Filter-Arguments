@@ -1,5 +1,8 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.06  Fri May 01 19:34:00 2009
+    - Added usage text to output on unknown argument.
+
 0.05  Sun Mar 22 10:54:02 2009
     - Fix for the line number problem.
 

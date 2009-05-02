@@ -4,7 +4,7 @@
 #
 # DESCRIPTION
 #
-#  A simple way to configure and read your command line arguments. 
+#  A simple way to configure and read your command line arguments.
 #
 # AUTHOR
 #   Dylan Doxey <dylan.doxey@gmail.com>
@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 use 5.0071;
 use strict;
@@ -28,47 +28,51 @@ use Filter::Simple;
 use Template;
 
 my $Arguments_Regex = qr{
-    ( 
-        my \s+ [(]? ( \s* \$\w+ (?: \s* [,] \s* \$ \w+ )* ) \s* [)]? 
-        \s* : \s* 
-        Arguments? 
-        (?: [(] \s* ( \w+ ) \s* [)] )? \s* 
-        (?: = \s* ( .+? ) )? 
-        ; 
+    (
+        my \s+ [(]? ( \s* \$\w+ (?: \s* [,] \s* \$ \w+ )* ) \s* [)]?
+        \s* : \s*
+        Arguments?
+        (?: [(] \s* ( \w+ ) \s* [)] )? \s*
+        (?: = \s* ( .+? ) )?
+        ;
     )
 }msx;
 
 my $template_value = <<'VALUE';
-            if ( $arg eq '--[% name %]' ) {
-                $[% name %] = shift @args;
-                next ARG;
-            }
+    if ( $arg eq '--[% name %]' ) {
+        $[% name %] = shift @args;
+        next ARG;
+    }
 VALUE
 
 my $template_bool = <<'BOOL';
-            if ( $arg eq '--[% name %]' ) {
-                $[% name %] = $[% name %] ? 0 : 1;
-                next ARG;
-            }
+    if ( $arg eq '--[% name %]' ) {
+        $[% name %] = $[% name %] ? 0 : 1;
+        next ARG;
+    }
 BOOL
 
 my $template_xbool = <<'VALUE';
-            if ( $arg eq '--[% name %]' ) {
-                $[% name %] = $[% name %] ? 0 : 1;
-                [% FOREACH other_name IN other_names %]$[% other_name %] = $[% name %] ? 0 : 1;
-                [% END %]next ARG;
-            }
+    if ( $arg eq '--[% name %]' ) {
+        $[% name %] = $[% name %] ? 0 : 1;
+        [% FOREACH other_name IN other_names %]$[% other_name %] = $[% name %] ? 0 : 1;
+        [% END %]next ARG;
+    }
 VALUE
 
 my $template_arguments = <<'ARGUMENTS';
-
-[% FOREACH declaration IN declarations %]    [% declaration %]
-[% END %]    ARGUMENTS:
+    [% FOREACH declaration IN declarations %]
+        [% declaration %]
+    [% END %]
+    ARGUMENTS:
     {
         my @args = @ARGV;
+        my $usage = "[% usage %]";
         ARG:
         while ( my $arg = shift @args ) {
-[% stack %]            die "unrecognized argument: $arg";
+            [% stack %]
+            print $usage;
+            die "unrecognized argument: $arg\n";
         }
     }
 ARGUMENTS
@@ -76,8 +80,10 @@ ARGUMENTS
 FILTER_ONLY
 	code_no_comments => sub {
 
+        my $line_count = 1;
         my %arguments;
         my @lines;
+        my @usage_lines;
         my @declarations;
         my @argument_stack;
 
@@ -88,15 +94,22 @@ FILTER_ONLY
             my $type           = $3 || 'bool';
             my $initialization = $4;
 
-            my $declaration 
-                = $names =~ m/[,]/msx 
+            my $declaration
+                = $names =~ m/[,]/msx
                 ? "my ($names)"
                 : "my $names";
 
-            $declaration 
-                .= $initialization
-                ? " = $initialization;"
-                : ';';
+            if ( $initialization ) {
+
+                # note: observation indicates no special handling is
+                # needed for multiline initializations and line number fixing
+                $declaration .= " = $initialization;";
+            }
+            else {
+                $declaration .= ';';
+            }
+
+            $line_count += $line =~ s/(?:\r?\n)/\n/msxg;
 
             push @declarations, $declaration;
             push @lines, $line;
@@ -126,11 +139,18 @@ FILTER_ONLY
                     next NAME
                         if $names{$name};
 
+                    my $usage_line
+                        = $type eq 'bool'
+                        ? "--$name"
+                        : "--$name <value>";
+
+                    push @usage_lines, $usage_line;
+
                     $names{$name} = 1;
 
-                    my $template_text 
-                        = $type eq 'bool' 
-                        ? $template_bool 
+                    my $template_text
+                        = $type eq 'bool'
+                        ? $template_bool
                         : $template_value;
 
                     my $code;
@@ -143,6 +163,8 @@ FILTER_ONLY
             }
             if ( $type eq 'xbool' ) {
 
+                my $usage_line = '';
+
                 NAME:
                 for my $name (@{ $names_ra }) {
 
@@ -151,6 +173,8 @@ FILTER_ONLY
 
                     $names{$name} = 1;
 
+                    $usage_line .= "$name|";
+
                     my @other_names = grep { $_ ne $name } @{ $names_ra };
 
                     my $code;
@@ -158,18 +182,41 @@ FILTER_ONLY
                     $template->process( \$template_xbool, \%names, \$code );
                     push @argument_stack, $code;
                 }
+
+                if ( $usage_line ) {
+                    chop $usage_line;
+                    push @usage_lines, "--$usage_line";
+                }
+
                 next TYPE;
             }
         }
 
+        my $usage
+            = @usage_lines
+            ? ( 'usage:\n$0 [options]\n    '
+                . ( join '\n    ', @usage_lines )
+                . '\n'
+              )
+            : "";
+
         my $argument_code;
-        my %args = ( 
+
+        my %args = (
             declarations => \@declarations,
-            stack        => join "", @argument_stack,
+            stack        => ( join "", @argument_stack ),
+            usage        => $usage,
         );
         $template->process( \$template_arguments, \%args, \$argument_code );
 
+        ## print 'x' . '=' x 40 . "\n$argument_code\n" . 'x' . '=' x 40 . "\n";
+
+        # remove newlines to keep inserted code to
+        # one line and prevent line number problems
         $argument_code =~ s{\n}{ }msxg;
+
+        # add some lines in case of multiline declarations
+        $argument_code .= "\n" x --$line_count;
 
         while ( my $line = shift @lines ) {
 
@@ -191,7 +238,7 @@ __END__
 =pod
 =head1 NAME
 
-Filter::Arguments - Configure and read your command line arguments from @ARGV. 
+Filter::Arguments - Configure and read your command line arguments from @ARGV.
 
 =head1 SYNOPSIS
 
@@ -205,6 +252,11 @@ Filter::Arguments - Configure and read your command line arguments from @ARGV.
  my ($three,$four,$five) : Arguments(value) = (3,4,5);
  my ($six,$seven,$eight) : Arguments(bool)  = ('SIX','SEVEN','EIGHT');
 
+ my $multiline : Argument(value) = <<END_ML;
+    my multi-line
+    initial value
+ END_ML
+
  my @result = (
      $solo,
      $bool_default,
@@ -213,20 +265,24 @@ Filter::Arguments - Configure and read your command line arguments from @ARGV.
      $x, $y, $z,
      $three, $four, $five,
      $six, $seven, $eight,
+     $multiline,
  );
-    
+
  print join ',', @result;
 
 if invoked as:
  $ script.pl --solo --a --b --c --d A --e B --f C --x --y --z --six
 
-will print: 
+will print:
 
- 0,,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT
+ 0,,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT,my multi-line
+ initial value
 
 =head1 DESCRIPTION
 
 Here is a simple way to configure and parse your command line arguments from @ARGV.
+If an unrecognized argument is given then a basic usage statement is printed
+and your program dies.
 
 =head2 ARG TYPES
 
@@ -234,12 +290,12 @@ Here is a simple way to configure and parse your command line arguments from @AR
 
 =item bool (default)
 
-This type of argument is either 1 or 0. If it is initialized to 1, then 
-it will flip-flop to 0 if the arg is given. 
+This type of argument is either 1 or 0. If it is initialized to 1, then
+it will flip-flop to 0 if the arg is given.
 
 =item xbool
 
-The 'x' as in XOR boolean. Only one of these booleans can be true. The 
+The 'x' as in XOR boolean. Only one of these booleans can be true. The
 flip-flop behavior also applies to these also. So you may initialize them
 however, but if one is set then the others are set to the opposite value
 of the one that is set.
@@ -248,32 +304,66 @@ of the one that is set.
 
 This type takes on the value of the next argument presented.
 
+Example:
+
+ my $noodle : Argument(value) = 'egg';
+
+The variable $noodle will be 'egg', unless the argument sequence:
+
+ --noodle instant
+
+Where $noodle will then be 'instant'.
+
+=back
+
+=head1 TODO
+
+=over
+
+=item regex type argument
+
+This would allow arguments matching a pattern such as:
+
+ my @words   : Argument(regex) = qr{\A \w+ \z}xms;
+ my @numbers : Argument(regex) = qr{\A \d+ \z}xms;
+
+The permitted argument sequence:
+
+ program.pl 12345 4321 horse
+
+=item multivalue arguments
+
+This would allow:
+
+ my @words : Argument(value);
+
+Where the permitted argument sequence would be:
+
+ program.pl --words horse cow pig
+
 =back
 
 =head1 DEPENDENCIES
 
-Template
-Filter::Simple
+=over
+
+=item Template
+
+=item Filter::Simple
+
+=back
 
 =head1 BUGS
 
-Line numbers will be inaccurate if you have an Argument 
-declaration which spans multiple lines.
-
-Example:
-
- my $a
- : Argument = 1;
-
-Line numbers in warnings and errors will be one less than true.
-
-Also, don't put comments at the end of an Argument line.
+Don't put comments at the end of an Argument line.
 
 Example:
 
  my $a :Argument = 1; # comment
 
 This will result in an 'Invalid SCALAR attribute' compile time error.
+
+Version 0.06 intends to resolve the line numbering bug.
 
 =head1 AUTHOR
 
