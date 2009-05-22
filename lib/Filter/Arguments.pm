@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 use 5.0071;
 use strict;
@@ -236,6 +236,7 @@ FILTER_ONLY
 __END__
 
 =pod
+
 =head1 NAME
 
 Filter::Arguments - Configure and read your command line arguments from @ARGV.
@@ -340,6 +341,13 @@ This would allow:
 Where the permitted argument sequence would be:
 
  program.pl --words horse cow pig
+
+=item required argument
+
+ my $required ! Argument(value);
+
+Where the program will die with usage statement if 
+this option is not provided.
 
 =back
 
