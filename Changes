@@ -1,5 +1,8 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.10  Sun Jul 19 19:56:50 2009
+    - Major rethinking of the syntax - not backward compatible.
+
 0.07  Fri May 22 04:56:11 2009
     - Noting dependency for Text::Balance version 2.0.0 in Makefile.
 

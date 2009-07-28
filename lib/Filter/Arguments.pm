@@ -19,216 +19,270 @@
 #=============================================================================
 
 package Filter::Arguments;
-our $VERSION = '0.07';
+$VERSION = '0.10';
 
 use 5.0071;
 use strict;
 use warnings FATAL => 'all';
 use Filter::Simple;
-use Template;
+
+my @Identifiers;
+my %Default_For;
+my %Alias_For;
 
 my $Arguments_Regex = qr{
-    (
-        my \s+ [(]? ( \s* \$\w+ (?: \s* [,] \s* \$ \w+ )* ) \s* [)]?
-        \s* : \s*
-        Arguments?
-        (?: [(] \s* ( \w+ ) \s* [)] )? \s*
-        (?: = \s* ( .+? ) )?
-        ;
-    )
+    ( [\@\$\%] \S+ \s* =  \s* )?
+    Arguments? \s*
+    ( [\(] .*? [\)] \s* )?
+    (?= [,;\)\}\]] )
 }msx;
 
-my $template_value = <<'VALUE';
-    if ( $arg eq '--[% name %]' ) {
-        $[% name %] = shift @args;
-        next ARG;
-    }
-VALUE
+my $Arguments_Usage_Regex = qr{
+    Arguments?::verify_usage \s* (?: [\(] [\)] )?
+}msx;
 
-my $template_bool = <<'BOOL';
-    if ( $arg eq '--[% name %]' ) {
-        $[% name %] = $[% name %] ? 0 : 1;
-        next ARG;
-    }
-BOOL
+sub verify_usage {
+    my $argv_ra = shift @_;
+    my %arguments = @_;
 
-my $template_xbool = <<'VALUE';
-    if ( $arg eq '--[% name %]' ) {
-        $[% name %] = $[% name %] ? 0 : 1;
-        [% FOREACH other_name IN other_names %]$[% other_name %] = $[% name %] ? 0 : 1;
-        [% END %]next ARG;
-    }
-VALUE
+    my $usage = "$0\n";
+    my @errors;
 
-my $template_arguments = <<'ARGUMENTS';
-    [% FOREACH declaration IN declarations %]
-        [% declaration %]
-    [% END %]
-    ARGUMENTS:
-    {
-        my @args = @ARGV;
-        my $usage = "[% usage %]";
-        ARG:
-        while ( my $arg = shift @args ) {
-            [% stack %]
-            print $usage;
-            die "unrecognized argument: $arg\n";
+    while ( my ($arg,$val) = each %arguments) {
+
+        my $alias   = $Alias_For{$arg};
+        my $default = $Default_For{$arg};
+
+        $val ||= $default;
+
+        if ( !$val ) {        
+            push @errors, "no value supplied for $arg";
+        }
+        
+        $usage .= "  $alias";
+        if ( $default ) {
+            $usage .= "\t(default is '$default')";
+        }
+        $usage .= "\n";
+    }
+
+    my %valid_alias = map { ( $Alias_For{$_} => 1 ) } keys %Alias_For;
+
+    ARG:
+    for my $arg (@{ $argv_ra }) {
+
+        next ARG
+            if $arg !~ m/\A --? /xms;
+
+        if ( !defined $valid_alias{$arg} ) {
+
+            push @errors, "unexpected argument $arg";
         }
     }
-ARGUMENTS
+
+    if ( @errors ) {
+
+        for my $error (@errors) {
+            warn "$error\n";
+        }
+        die "$usage\n";
+    }
+    return 1;
+}
+
+sub parse {
+    my ( $identifier, $params_rh, $argv_ra ) = @_;
+
+    $identifier =~ s{ (?: \A [\(]? \s* | \s* [\)]? ) }{}xmsg;
+
+    if ( $identifier =~ m{,} ) {
+        my @idents = split /\s*,\s*/, $identifier;
+        my @results = map { parse( $_, $params_rh, $argv_ra ) } @idents;
+        return @results;
+    }
+
+    my ($sigil,$ident) = $identifier =~ m/\A ( \W+ ) ( \w+ ) \z/xms;
+    $sigil ||= "";
+    $ident ||= "";
+ 
+    my $type
+        = $sigil eq '@'            ? 'ARRAY'
+        : $sigil eq '%'            ? 'HASH'
+        : $ident =~ m/ _ra \z/xmsi ? 'ARRAY'
+        : $ident =~ m/ _rh \z/xmsi ? 'HASH'
+        :                            'SCALAR';
+
+    my ($default,$alias);
+
+    if ( $params_rh ) {
+
+        if ( ref $params_rh eq 'HASH' ) {
+
+            if ( defined $params_rh->{alias} ) {
+                $alias = $params_rh->{alias};
+            }
+
+            if ( defined $params_rh->{default} ) {
+                $default = $params_rh->{default};
+            }
+
+            if ( keys %{ $params_rh } && !$alias && !$default ) {
+                ($alias,$default) = each %{ $params_rh };
+            }
+        }
+    }
+    
+    $alias ||= $ident;
+    $alias =~ s{ _r[ah] \z}{}xmsi;
+    $alias = "--$alias";
+    $alias =~ s{\A -{3,} }{--}xms;
+
+    $Alias_For{$ident}   = $alias;
+    $Default_For{$ident} = $default;
+
+    if ( $type eq 'HASH' ) {
+
+        my $key;
+        my %arguments;
+
+        ARG:
+        for my $arg_index ( 0 .. $#{ $argv_ra } ) {
+
+            my $arg = $argv_ra->[$arg_index];
+
+            if ( $arg =~ m/\A --? /xms ) {
+
+                $key = $arg;
+                $key =~ s{\A [-]+ }{}xms;
+
+                $arguments{$key} = [];
+                next ARG;
+            }
+            else {
+
+                if ( !$key ) {
+                    $key = $alias;
+                    $key =~ s{\A [-]+ }{}xms;
+                }
+
+                push @{ $arguments{$key} }, $arg;    
+            }
+        }
+
+        if ( !keys %arguments && $default ) {
+            $key = $alias;
+            $key =~ s{\A [-]+ }{}xms;
+            $arguments{$key} = [ $default ];
+        }
+
+        for my $option (keys %arguments) {
+        
+            if ( @{ $arguments{$option} } == 0 ) {
+                $arguments{$option} = 1;
+            }
+            elsif ( @{ $arguments{$option} } == 1 ) {
+                $arguments{$option} = $arguments{$option}->[0];
+            }
+        }
+
+        return %arguments
+            if wantarray;
+
+        return \%arguments;
+    }
+
+    ARG:
+    for my $arg_index ( 0 .. $#{ $argv_ra } ) {
+
+        my $next_index 
+            = $arg_index < $#{ $argv_ra } 
+            ? $arg_index + 1 
+            : undef;
+
+        my $arg = $argv_ra->[$arg_index];
+
+        next ARG
+            if $arg ne $alias;
+
+        if ( $type eq 'SCALAR' ) {
+
+            my $value 
+                = defined $next_index 
+                ? $argv_ra->[$next_index] 
+                : 1;
+
+            if ( $value =~ m/\A --? /xms ) {
+                $value = $default || 1;
+            }
+
+            return $value;
+        }
+        elsif ( $type eq 'ARRAY' ) {
+
+            my @values;
+
+            VAL:
+            for my $next_index ( $arg_index + 1 .. $#{ $argv_ra } ) {
+
+                my $value = $argv_ra->[$next_index];
+
+                last VAL
+                    if $value =~ m/\A --? /xms;
+                
+                push @values, $value;
+            }
+
+            return @values
+                if wantarray;
+
+            return \@values;
+        }
+    }
+
+    return @{ $default }
+        if wantarray && $default && ref $default eq 'ARRAY';
+
+    return $default;
+}
+
+sub transform {
+    my ($assignment,$parameters) = @_;
+
+    $assignment ||= "";
+    $parameters ||= "";
+
+    my $identifiers = $assignment;
+    $identifiers =~ s{(?: \A \s* [^\@\$\%\(]* | \W* \z )}{}xmsg;
+    $identifiers =~ s{\s*}{}xmsg;
+
+    push @Identifiers, split /\s*,\s*/, $identifiers;
+
+    return "${assignment}Filter::Arguments::parse(q{$identifiers},{$parameters},\\\@ARGV)";
+}
+
+sub usage {
+    
+    my $arg_string = "";
+
+    for my $identifier (@Identifiers) {
+
+        my $key = $identifier;
+        my $val = $identifier;
+
+        $key =~ s{\A \W }{}xmsg;
+
+        $arg_string .= " $key => $val,";
+    }
+
+    return "Filter::Arguments::verify_usage(\\\@ARGV,$arg_string)";
+}
 
 FILTER_ONLY
 	code_no_comments => sub {
 
-        my $line_count = 1;
-        my %arguments;
-        my @lines;
-        my @usage_lines;
-        my @declarations;
-        my @argument_stack;
-
-        while ( m/$Arguments_Regex/msxg ) {
-
-            my $line           = $1;
-            my $names          = $2;
-            my $type           = $3 || 'bool';
-            my $initialization = $4;
-
-            my $declaration
-                = $names =~ m/[,]/msx
-                ? "my ($names)"
-                : "my $names";
-
-            if ( $initialization ) {
-
-                # note: observation indicates no special handling is
-                # needed for multiline initializations and line number fixing
-                $declaration .= " = $initialization;";
-            }
-            else {
-                $declaration .= ';';
-            }
-
-            $line_count += $line =~ s/(?:\r?\n)/\n/msxg;
-
-            push @declarations, $declaration;
-            push @lines, $line;
-
-            for my $name (split /,/, $names) {
-
-                $name =~ s{ (?: \A \s* | \s* \z) }{}msxg;
-                $name =~ s{ \A \$ }{}msxg;
-
-                push @{ $arguments{$type} }, $name;
-            }
-        }
-
-        my %names;
-        my $template = Template->new();
-
-        TYPE:
-        for my $type (keys %arguments) {
-
-            my $names_ra = $arguments{$type};
-
-            if ( $type eq 'bool' || $type eq 'value' ) {
-
-                NAME:
-                for my $name (@{ $names_ra }) {
-
-                    next NAME
-                        if $names{$name};
-
-                    my $usage_line
-                        = $type eq 'bool'
-                        ? "--$name"
-                        : "--$name <value>";
-
-                    push @usage_lines, $usage_line;
-
-                    $names{$name} = 1;
-
-                    my $template_text
-                        = $type eq 'bool'
-                        ? $template_bool
-                        : $template_value;
-
-                    my $code;
-                    my %name_for = ( name => $name );
-                    $template->process( \$template_text, \%name_for, \$code );
-
-                    push @argument_stack, $code;
-                }
-                next TYPE;
-            }
-            if ( $type eq 'xbool' ) {
-
-                my $usage_line = '';
-
-                NAME:
-                for my $name (@{ $names_ra }) {
-
-                    next NAME
-                        if $names{$name};
-
-                    $names{$name} = 1;
-
-                    $usage_line .= "$name|";
-
-                    my @other_names = grep { $_ ne $name } @{ $names_ra };
-
-                    my $code;
-                    my %names = ( name => $name, other_names => \@other_names );
-                    $template->process( \$template_xbool, \%names, \$code );
-                    push @argument_stack, $code;
-                }
-
-                if ( $usage_line ) {
-                    chop $usage_line;
-                    push @usage_lines, "--$usage_line";
-                }
-
-                next TYPE;
-            }
-        }
-
-        my $usage
-            = @usage_lines
-            ? ( 'usage:\n$0 [options]\n    '
-                . ( join '\n    ', @usage_lines )
-                . '\n'
-              )
-            : "";
-
-        my $argument_code;
-
-        my %args = (
-            declarations => \@declarations,
-            stack        => ( join "", @argument_stack ),
-            usage        => $usage,
-        );
-        $template->process( \$template_arguments, \%args, \$argument_code );
-
-        ## print 'x' . '=' x 40 . "\n$argument_code\n" . 'x' . '=' x 40 . "\n";
-
-        # remove newlines to keep inserted code to
-        # one line and prevent line number problems
-        $argument_code =~ s{\n}{ }msxg;
-
-        # add some lines in case of multiline declarations
-        $argument_code .= "\n" x --$line_count;
-
-        while ( my $line = shift @lines ) {
-
-            $line =~ s{([\$\(\)])}{\\$1}msxg;
-
-            if ( @lines == 0 ) {
-                s{$line}{$argument_code};
-            }
-            else {
-                s{$line}{};
-            }
-        }
+        $_ =~ s{$Arguments_Regex}{transform($1,$2)}xmsge;
+        
+        $_ =~ s{$Arguments_Usage_Regex}{usage()}xmsge;
 	};
 
 1;
@@ -245,109 +299,118 @@ Filter::Arguments - Configure and read your command line arguments from @ARGV.
 
  use Filter::Arguments;
 
- my $solo                : Argument(bool) = 1;
- my $bool_default        : Argument;
- my ($a,$b,$c)           : Arguments(bool);
- my ($d,$e,$f)           : Arguments(value);
- my ($x,$y,$z)           : Arguments(xbool);
- my ($three,$four,$five) : Arguments(value) = (3,4,5);
- my ($six,$seven,$eight) : Arguments(bool)  = ('SIX','SEVEN','EIGHT');
+ @ARGV = qw( --drink Jolt --sandwhich BLT );
 
- my $multiline : Argument(value) = <<END_ML;
-    my multi-line
-    initial value
- END_ML
+ my $beverage = Argument( alias => 'drink', default => 'tea' );
+ my $food     = Argument( sandwich => 'ham & cheese' );
 
- my @result = (
-     $solo,
-     $bool_default,
-     $a, $b, $c,
-     $d, $e, $f,
-     $x, $y, $z,
-     $three, $four, $five,
-     $six, $seven, $eight,
-     $multiline,
- );
+ Arguments::verify_usage();
 
- print join ',', @result;
-
-if invoked as:
- $ script.pl --solo --a --b --c --d A --e B --f C --x --y --z --six
-
-will print:
-
- 0,,1,1,1,A,B,C,0,0,1,3,4,5,0,SEVEN,EIGHT,my multi-line
- initial value
+ # prints "I'll have a BLT and a Jolt please."
+ print "I'll have a $food and a $beverage please.\n";
 
 =head1 DESCRIPTION
 
 Here is a simple way to configure and parse your command line arguments from @ARGV.
-If an unrecognized argument is given then a basic usage statement is printed
-and your program dies.
 
-=head2 ARG TYPES
+=head1 FEATURES
 
 =over
 
-=item bool (default)
+=item automatic enforcement of required values
 
-This type of argument is either 1 or 0. If it is initialized to 1, then
-it will flip-flop to 0 if the arg is given.
+=item automatic generation of usage text
 
-=item xbool
+=item automatic detection of alias
 
-The 'x' as in XOR boolean. Only one of these booleans can be true. The
-flip-flop behavior also applies to these also. So you may initialize them
-however, but if one is set then the others are set to the opposite value
-of the one that is set.
-
-=item value
-
-This type takes on the value of the next argument presented.
-
-Example:
-
- my $noodle : Argument(value) = 'egg';
-
-The variable $noodle will be 'egg', unless the argument sequence:
-
- --noodle instant
-
-Where $noodle will then be 'instant'.
+=item automatic construction of hash, array, scalar, hash ref, or array ref results
 
 =back
 
-=head1 TODO
+=head1 EXAMPLES
 
 =over
 
-=item regex type argument
+=item a required command line option 
 
-This would allow arguments matching a pattern such as:
+ my $beverage = Argument;
+ Arguments::verify_usage();
+ 
+If the --beverage option is not found in @ARGV then the verify_usage function will die with the appropriate usage instructions.
 
- my @words   : Argument(regex) = qr{\A \w+ \z}xms;
- my @numbers : Argument(regex) = qr{\A \d+ \z}xms;
+=item an optional command line option
 
-The permitted argument sequence:
+ my $beverage = Argument( default => 'Milk' );
+ Arguments::verify_usage();
 
- program.pl 12345 4321 horse
+If no --beverage option is found then the value 'Milk' is provided.
 
-=item multivalue arguments
+=item an aliased option populates a variable of a different name
 
-This would allow:
+ my $beverage = Argument( alias => 'drink' );
+ Arguments::verify_usage();
 
- my @words : Argument(value);
+The value of $beverage will be whatever is found to follow --drink in @ARGV.
 
-Where the permitted argument sequence would be:
+=item an implied alias and default
 
- program.pl --words horse cow pig
+ my $beverage = Argument( drink => 'Milk' );
+ Arguments::verify_usage();
 
-=item required argument
+The value of $beverage will be whatever is found to follow --drink in @ARGV, or it will default to 'Milk'.
 
- my $required ! Argument(value);
+=item populate an array
 
-Where the program will die with usage statement if 
-this option is not provided.
+ my @drinks = Argument( default => [qw( Water OJ Jolt )] );
+
+The @drinks array will contain whatever values follow --drinks in @ARGV, or it will contain the given defaults.
+
+=item populate a list of scalars
+
+ my ($a,$b,$c) = Arguments;
+
+This will populate $a, $b, and $c with 1 if --a, --b, and --c are all found in @ARGV.
+
+Note, it sure would confuse matters if these variables are not booleans, or single value options.
+
+=item slurp up everything in @ARGV as a hash
+
+ my %args = Arguments;
+
+Um, what exactly does that do?
+
+ @ARGV = qw( --a --b --c --drink Jolt --eat Rice Beans --numbers 3 2 1 );
+
+Translates to:
+
+ %args = (
+    a       => 1,
+    b       => 1,
+    c       => 1,
+    drink   => 'Jolt',
+    eat     => [ 'Rice', 'Beans' ],
+    numbers => [ 3, 2, 1 ],
+ )
+
+Note, it wouldn't make much sense to use the verify_usage fuction in this case.
+
+=item populate an array ref 
+
+ my $drinks_ra = Argument( default => [qw( Water OJ Jolt )] );
+
+In this case the '_ra' naming convention for "reference to array" is noticed and the behavior is otherwise the same as the @drinks example above.
+
+Note, the same example like this:
+
+ my $drinks = Argument( default => [qw( Water OJ Jolt )] );
+
+Now drinks is not recognized as a reference to array type of scalar, and instead it will be populated with 'Water'.
+
+=item populate a hash ref
+
+ my $args_rh = Arguments;
+
+Same as the above example, where the '_rh' suffix is recognized as a special reference to hash and populated as such.
 
 =back
 
@@ -355,23 +418,15 @@ this option is not provided.
 
 =over
 
-=item Template
-
 =item Filter::Simple
 
 =back
 
 =head1 BUGS
 
-Don't put comments at the end of an Argument line.
-
-Example:
-
- my $a :Argument = 1; # comment
-
-This will result in an 'Invalid SCALAR attribute' compile time error.
-
-Version 0.06 intends to resolve the line numbering bug.
+Version 0.10 is a complete rewrite from 0.07. 
+Despite big improvements, this revision doesn't quite acheive the elegance I have always dreamed of.
+I'm ready for anything.
 
 =head1 AUTHOR
 
