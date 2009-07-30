@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 use 5.0071;
 use strict;
@@ -29,6 +29,12 @@ use Filter::Simple;
 my @Identifiers;
 my %Default_For;
 my %Alias_For;
+
+my $Retro_Arguments_Regex = qr{
+    : \s* Arguments? \s*
+    (?: [\(] .*? [\)] \s* )?
+    ( = \s* [^;]+ )? ;
+}msx;
 
 my $Arguments_Regex = qr{
     ( [\@\$\%] \S+ \s* =  \s* )?
@@ -60,8 +66,13 @@ sub verify_usage {
         }
         
         $usage .= "  $alias";
-        if ( $default ) {
-            $usage .= "\t(default is '$default')";
+        if ( defined $default ) {
+            if ( length $default ) {
+                $usage .= "\t(default is '$default')";
+            }
+            else {
+                $usage .= "\t(default is empty string)";
+            }
         }
         $usage .= "\n";
     }
@@ -96,8 +107,28 @@ sub parse {
     $identifier =~ s{ (?: \A [\(]? \s* | \s* [\)]? ) }{}xmsg;
 
     if ( $identifier =~ m{,} ) {
+
         my @idents = split /\s*,\s*/, $identifier;
-        my @results = map { parse( $_, $params_rh, $argv_ra ) } @idents;
+        my @results;
+        for my $i ( 0 .. $#idents ) {
+        
+            my $ident  = $idents[$i];
+            my %params = %{ $params_rh };
+
+            if ( defined $params{default} && ref $params{default} eq 'ARRAY' ) {
+            
+                if ( $i <= $#{ $params{default} } ) {
+
+                    $params{default} = $params{default}->[$i];
+                }
+                else {
+
+                    delete $params{default};
+                }
+            }
+
+            push @results, parse( $ident, \%params, $argv_ra );
+        }
         return @results;
     }
 
@@ -245,6 +276,30 @@ sub parse {
     return $default;
 }
 
+sub retro_transform {
+    my ($default) = @_;
+
+    $default ||= "";
+
+    if ( $default ) {
+
+        $default =~ s{(?: \A [=\s]* | \s* \z )}{}xmsg;
+        
+        if ( $default =~ m{\A [\(] }xms ) {
+
+            $default =~ s{(?: \A [\(] | \W \z )}{}xmsg;
+           
+            $default = "( default => [ $default ] )";
+        }
+        else {
+
+            $default = "( default => '$default' )";
+        }
+    }
+
+    return "= Arguments$default;";
+}
+
 sub transform {
     my ($assignment,$parameters) = @_;
 
@@ -280,6 +335,9 @@ sub usage {
 FILTER_ONLY
 	code_no_comments => sub {
 
+        # for backward compatibility
+        $_ =~ s{$Retro_Arguments_Regex}{retro_transform($1)}xmsge;
+        
         $_ =~ s{$Arguments_Regex}{transform($1,$2)}xmsge;
         
         $_ =~ s{$Arguments_Usage_Regex}{usage()}xmsge;
@@ -419,6 +477,21 @@ Same as the above example, where the '_rh' suffix is recognized as a special ref
 =over
 
 =item Filter::Simple
+
+=back
+
+=head1 TODO
+
+=over
+
+=item Regex or list based validation of given values.
+
+For example:
+
+ my $x = Argument( valid => qr{\A \d+ \z}xms );
+ my $y = Argument( valid => [qw( 1 3 5 7 11 12 )] );
+
+=item Usage validation without the need for a special function call.
 
 =back
 

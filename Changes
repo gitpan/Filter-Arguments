@@ -1,5 +1,10 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.11  Wed Jul 29 21:36:08 2009
+    - Bug fix for default values of empty string
+    - Removed references to obsolete Template dependency
+    - Additions for pre 0.10 backward compatibility
+
 0.10  Sun Jul 19 19:56:50 2009
     - Major rethinking of the syntax - not backward compatible.
 

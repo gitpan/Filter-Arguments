@@ -6,7 +6,6 @@ WriteMakefile(
     NAME              => 'Filter::Arguments',
     VERSION_FROM      => 'lib/Filter/Arguments.pm', # finds $VERSION
     PREREQ_PM         => {
-        'Template'       => '2.20',
         'Filter::Simple' => '0.82',
         'Text::Balanced' => '2.0.0',
     }, # e.g., Module::Name => 1.1
