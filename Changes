@@ -1,5 +1,10 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.13  Wed Jul 30 00:09:56 2009
+    - Recognizes --help, --usage, --? and returns usage text
+    - Fixed a bug with interpreting alias and default keys
+    - Fixed a bug with requiring values when default value given is "" or 0
+
 0.12  Wed Jul 29 22:50:18 2009
     - Fixed incorrect file listing in MANIFEST resulting in Makefile.PL fatal error.
 

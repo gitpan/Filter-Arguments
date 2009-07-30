@@ -17,13 +17,16 @@ my $carbohydrate             = Argument( alias => '--carb', default => 'rice' );
 my $noodles                  = Argument;
 my ($wasabi,$rooster,$cream) = Arguments;
 my $beans                    = Argument( 'holey' => 'moley' );
+my $function                 = Argument( default => 'search' );
+my $keyword                  = Argument( default => "" );
+my $page                     = Argument( default => 1 );
 
 my @warnings;
 my @expected_warnings = (
+    'no value supplied for noodles',
     'no value supplied for cream',
     'no value supplied for rooster',
     'no value supplied for wasabi',
-    'no value supplied for noodles',
     'unexpected argument --unknown'
 );
 
@@ -40,12 +43,15 @@ $usage_text =~ s{\A .*? t/usage}{t/usage}xmsg;
 
 my $expected_usage_text = <<"USAGE_TEXT";
 t/usage.t
+  --keyword\t(default is empty string)
+  --page\t(default is '1')
+  --function\t(default is 'search')
+  --carb\t(default is 'rice')
+  --noodles
   --cream
   --rooster
-  --carb\t(default is 'rice')
-  --holey\t(default is 'moley')
   --wasabi
-  --noodles
+  --holey\t(default is 'moley')
 
 USAGE_TEXT
 

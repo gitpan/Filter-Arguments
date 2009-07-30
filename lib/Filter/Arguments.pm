@@ -19,7 +19,7 @@
 #=============================================================================
 
 package Filter::Arguments;
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 use 5.0071;
 use strict;
@@ -61,10 +61,10 @@ sub verify_usage {
 
         $val ||= $default;
 
-        if ( !$val ) {        
+        if ( !defined $val ) {
             push @errors, "no value supplied for $arg";
         }
-        
+
         $usage .= "  $alias";
         if ( defined $default ) {
             if ( length $default ) {
@@ -87,7 +87,12 @@ sub verify_usage {
 
         if ( !defined $valid_alias{$arg} ) {
 
-            push @errors, "unexpected argument $arg";
+            if ( $arg =~ m{\A --? (?: help|usage|[?] ) \z}xms ) {
+                push @errors, "Usage:";
+            }
+            else {
+                push @errors, "unexpected argument $arg";
+            }
         }
     }
 
@@ -111,12 +116,12 @@ sub parse {
         my @idents = split /\s*,\s*/, $identifier;
         my @results;
         for my $i ( 0 .. $#idents ) {
-        
+
             my $ident  = $idents[$i];
             my %params = %{ $params_rh };
 
             if ( defined $params{default} && ref $params{default} eq 'ARRAY' ) {
-            
+
                 if ( $i <= $#{ $params{default} } ) {
 
                     $params{default} = $params{default}->[$i];
@@ -135,7 +140,7 @@ sub parse {
     my ($sigil,$ident) = $identifier =~ m/\A ( \W+ ) ( \w+ ) \z/xms;
     $sigil ||= "";
     $ident ||= "";
- 
+
     my $type
         = $sigil eq '@'            ? 'ARRAY'
         : $sigil eq '%'            ? 'HASH'
@@ -157,12 +162,23 @@ sub parse {
                 $default = $params_rh->{default};
             }
 
-            if ( keys %{ $params_rh } && !$alias && !$default ) {
-                ($alias,$default) = each %{ $params_rh };
+            if ( !$alias && !$default ) {
+
+                ALIAS_DEFAULT:
+                while ( my ($a,$d) = each %{ $params_rh } ) {
+
+                    # Don't allow certain reserved words in this mode
+                    # use: alias => 'default' when option --default is needed
+                    # use: alias => 'alias' when option --alias is needed
+                    next ALIAS_DEFAULT
+                        if $a eq 'default' || $a eq 'alias';
+
+                    ($alias,$default) = ($a,$d);
+                }
             }
         }
     }
-    
+
     $alias ||= $ident;
     $alias =~ s{ _r[ah] \z}{}xmsi;
     $alias = "--$alias";
@@ -196,7 +212,7 @@ sub parse {
                     $key =~ s{\A [-]+ }{}xms;
                 }
 
-                push @{ $arguments{$key} }, $arg;    
+                push @{ $arguments{$key} }, $arg;
             }
         }
 
@@ -207,7 +223,7 @@ sub parse {
         }
 
         for my $option (keys %arguments) {
-        
+
             if ( @{ $arguments{$option} } == 0 ) {
                 $arguments{$option} = 1;
             }
@@ -225,9 +241,9 @@ sub parse {
     ARG:
     for my $arg_index ( 0 .. $#{ $argv_ra } ) {
 
-        my $next_index 
-            = $arg_index < $#{ $argv_ra } 
-            ? $arg_index + 1 
+        my $next_index
+            = $arg_index < $#{ $argv_ra }
+            ? $arg_index + 1
             : undef;
 
         my $arg = $argv_ra->[$arg_index];
@@ -237,9 +253,9 @@ sub parse {
 
         if ( $type eq 'SCALAR' ) {
 
-            my $value 
-                = defined $next_index 
-                ? $argv_ra->[$next_index] 
+            my $value
+                = defined $next_index
+                ? $argv_ra->[$next_index]
                 : 1;
 
             if ( $value =~ m/\A --? /xms ) {
@@ -259,7 +275,7 @@ sub parse {
 
                 last VAL
                     if $value =~ m/\A --? /xms;
-                
+
                 push @values, $value;
             }
 
@@ -284,11 +300,11 @@ sub retro_transform {
     if ( $default ) {
 
         $default =~ s{(?: \A [=\s]* | \s* \z )}{}xmsg;
-        
+
         if ( $default =~ m{\A [\(] }xms ) {
 
             $default =~ s{(?: \A [\(] | \W \z )}{}xmsg;
-           
+
             $default = "( default => [ $default ] )";
         }
         else {
@@ -316,7 +332,7 @@ sub transform {
 }
 
 sub usage {
-    
+
     my $arg_string = "";
 
     for my $identifier (@Identifiers) {
@@ -337,9 +353,9 @@ FILTER_ONLY
 
         # for backward compatibility
         $_ =~ s{$Retro_Arguments_Regex}{retro_transform($1)}xmsge;
-        
+
         $_ =~ s{$Arguments_Regex}{transform($1,$2)}xmsge;
-        
+
         $_ =~ s{$Arguments_Usage_Regex}{usage()}xmsge;
 	};
 
@@ -375,13 +391,13 @@ Here is a simple way to configure and parse your command line arguments from @AR
 
 =over
 
-=item automatic enforcement of required values
+=item * Automatic enforcement of required values
 
-=item automatic generation of usage text
+=item * Automatic generation of usage text
 
-=item automatic detection of alias
+=item * Automatic detection of alias
 
-=item automatic construction of hash, array, scalar, hash ref, or array ref results
+=item * Automatic construction of hash, array, scalar, hash ref, or array ref results
 
 =back
 
@@ -389,11 +405,11 @@ Here is a simple way to configure and parse your command line arguments from @AR
 
 =over
 
-=item a required command line option 
+=item a required command line option
 
  my $beverage = Argument;
  Arguments::verify_usage();
- 
+
 If the --beverage option is not found in @ARGV then the verify_usage function will die with the appropriate usage instructions.
 
 =item an optional command line option
@@ -452,7 +468,7 @@ Translates to:
 
 Note, it wouldn't make much sense to use the verify_usage fuction in this case.
 
-=item populate an array ref 
+=item populate an array ref
 
  my $drinks_ra = Argument( default => [qw( Water OJ Jolt )] );
 
@@ -495,9 +511,27 @@ For example:
 
 =back
 
+=head1 LIMITATIONS
+
+Suppose you want to support the option --alias with a default value of 'default'.
+
+ my $option = Argument( alias => 'default' );
+
+This will be correctly interpreted as option --default and no default value.
+
+This is a special case limitation because 'alias' is a reserved key.
+
+In this one wierd particular situation you'll need to do:
+
+ my $option = Argument( alias => 'alias', default => 'default' );
+
+Or:
+
+ my $alias = Argument( default => 'default' );
+
 =head1 BUGS
 
-Version 0.10 is a complete rewrite from 0.07. 
+Version 0.10 is a complete rewrite from 0.07.
 Despite big improvements, this revision doesn't quite acheive the elegance I have always dreamed of.
 I'm ready for anything.
 
