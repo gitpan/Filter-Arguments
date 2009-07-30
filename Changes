@@ -1,5 +1,8 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.12  Wed Jul 29 22:50:18 2009
+    - Fixed incorrect file listing in MANIFEST resulting in Makefile.PL fatal error.
+
 0.11  Wed Jul 29 21:36:08 2009
     - Bug fix for default values of empty string
     - Removed references to obsolete Template dependency

@@ -2,5 +2,10 @@ Changes
 Makefile.PL
 MANIFEST
 README
-t/Filter-Arguments.t
 lib/Filter/Arguments.pm
+t/usage.t
+t/simple.t
+t/scalar.t
+t/hash.t
+t/array.t
+t/backward.t
