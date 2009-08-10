@@ -1,25 +1,6 @@
-#================================================================== -*-perl-*-
-#
-# Filter::Arguments
-#
-# DESCRIPTION
-#
-#  A simple way to configure and read your command line arguments.
-#
-# AUTHOR
-#   Dylan Doxey <dylan.doxey@gmail.com>
-#
-# COPYRIGHT
-#   Copyright (C) 2009 Dylan Doxey
-#
-#   This library is free software; you can redistribute it and/or modify it
-#   under the same terms as Perl itself, either Perl version 5.8.0 or, at
-#   your option, any later version of Perl 5 you may have available.
-#
-#=============================================================================
-
 package Filter::Arguments;
-$VERSION = '0.13';
+
+our $VERSION = '0.14';
 
 use 5.0071;
 use strict;

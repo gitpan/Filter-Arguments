@@ -1,5 +1,8 @@
 Revision history for Perl extension Filter::Arguments.
 
+0.14  Mon Aug 10 00:27:55 2009
+    - Updated dependency list
+
 0.13  Wed Jul 30 00:09:56 2009
     - Recognizes --help, --usage, --? and returns usage text
     - Fixed a bug with interpreting alias and default keys

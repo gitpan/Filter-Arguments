@@ -1,4 +1,4 @@
-Filter-Arguments version 0.13
+Filter-Arguments version 0.14
 =============================
 
 INSTALLATION
@@ -12,7 +12,9 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Filter::Simple
+    Filter::Simple
+    Text::Balanced 2.0.0
+    Test::More
 
 COPYRIGHT AND LICENCE
 
